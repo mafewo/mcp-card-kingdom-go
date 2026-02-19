@@ -1,12 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/mafewo/mcp-card-kingdom-go/scraper"
-	"github.com/mark3labs/mcp-go"
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -16,9 +16,9 @@ func main() {
 	// Add search_prices tool
 	searchTool := mcp.NewTool("search_prices",
 		mcp.WithDescription("Search for card prices on Card Kingdom"),
-		mcp.WithArgument("query",
-			mcp.SetDescription("The name of the card to search for"),
-			mcp.SetRequired(true),
+		mcp.WithString("query",
+			mcp.Description("The name of the card to search for"),
+			mcp.Required(),
 		),
 	)
 
@@ -29,10 +29,10 @@ func main() {
 	}
 }
 
-func searchPricesHandler(args map[string]interface{}) (*mcp.CallToolResult, error) {
-	query, ok := args["query"].(string)
-	if !ok {
-		return mcp.NewToolResultError("Invalid query"), nil
+func searchPricesHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	query, err := request.RequireString("query")
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Invalid query: %v", err)), nil
 	}
 	
 	prices, err := scraper.SearchPrices(query)
@@ -40,9 +40,13 @@ func searchPricesHandler(args map[string]interface{}) (*mcp.CallToolResult, erro
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to search prices: %v", err)), nil
 	}
 
+	if len(prices) == 0 {
+		return mcp.NewToolResultText(fmt.Sprintf("No prices found for %s", query)), nil
+	}
+
 	result := fmt.Sprintf("Prices for %s:\n", query)
 	for _, p := range prices {
-		result += fmt.Sprintf("- Condition: %s, Price: $%.2f, Stock: %d\n", p.Condition, p.Price, p.Stock)
+		result += fmt.Sprintf("- Name: %s, Condition: %s, Price: $%.2f, Stock: %d\n", p.Name, p.Condition, p.Price, p.Stock)
 	}
 
 	return mcp.NewToolResultText(result), nil
